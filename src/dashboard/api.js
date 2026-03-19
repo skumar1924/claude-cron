@@ -13,5 +13,5 @@ export const updateJob = (id, body) =>
     headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json())
 export const deleteJob = id =>
   fetch(`${BASE}/api/jobs/${id}`, { method: 'DELETE' })
-export const triggerJob = id =>
+export const runJob = id =>
   fetch(`${BASE}/api/jobs/${id}/run`, { method: 'POST' })
