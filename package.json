@@ -32,12 +32,12 @@
       {
         "displayName": "node",
         "testEnvironment": "node",
-        "testPathPattern": "tests/(?!dashboard)"
+        "testMatch": ["**/tests/*.test.*"]
       },
       {
         "displayName": "jsdom",
         "testEnvironment": "jsdom",
-        "testPathPattern": "tests/dashboard",
+        "testMatch": ["**/tests/dashboard/**/*.test.*"],
         "setupFilesAfterEnv": ["@testing-library/jest-dom"]
       }
     ]

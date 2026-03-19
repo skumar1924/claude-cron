@@ -1,7 +1,9 @@
 import request from 'supertest'
 import { createTestServer } from '../src/server/index.js'
 import { createDb } from '../src/server/db.js'
-import { tmpdir } from 'os'; import { join } from 'path'; import { unlinkSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
+import { unlinkSync } from 'fs'
 
 const dbPath = join(tmpdir(), `server-test-${Date.now()}.db`)
 let app, db
@@ -59,4 +61,9 @@ test('DELETE /api/jobs/:id on builtin returns 403', async () => {
               VALUES ('builtin', 'digest', '0 8 * * 1', 'x', 1)`).run()
   const res = await request(app).delete('/api/jobs/builtin')
   expect(res.status).toBe(403)
+})
+
+test('PUT /api/jobs/:id on unknown id returns 404', async () => {
+  const res = await request(app).put('/api/jobs/does-not-exist').send({ name: 'x' })
+  expect(res.status).toBe(404)
 })

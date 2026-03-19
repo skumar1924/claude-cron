@@ -4,10 +4,9 @@ import { createDb, insertJob, getJob, listJobs, updateJob,
 import { syncJobToSettings, removeJobFromSettings, injectJobTag } from './scheduler.js'
 import { v4 as uuidv4 } from 'uuid'
 import { writeFileSync } from 'fs'
-import { join } from 'path'
+import { join, dirname } from 'path'
 import { homedir } from 'os'
 import { fileURLToPath } from 'url'
-import { dirname } from 'path'
 import { spawn } from 'child_process'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -39,6 +38,7 @@ function buildApp(db, { sync = true } = {}) {
 
   app.put('/api/jobs/:id', (req, res) => {
     const { id } = req.params
+    if (!getJob(db, id)) return res.status(404).end()
     const fields = { ...req.body }
     if (fields.prompt) fields.prompt = injectJobTag(fields.prompt, id)
     updateJob(db, id, fields)
