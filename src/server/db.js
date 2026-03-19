@@ -70,7 +70,7 @@ export function listRuns(db, { jobId, days } = {}) {
   const params = []
   if (jobId) { query += ' AND job_id = ?'; params.push(jobId) }
   if (days)  { query += ` AND started_at >= datetime('now', ?)`; params.push(`-${days} days`) }
-  query += ' ORDER BY started_at DESC'
+  query += ' ORDER BY started_at DESC, rowid DESC'
   return db.prepare(query).all(...params)
 }
 
