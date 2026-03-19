@@ -28,6 +28,20 @@ test('parseSchedule throws on invalid cron', () => {
   expect(() => parseSchedule('not-a-cron')).toThrow()
 })
 
+test('injectJobTag handles tag at start of prompt', () => {
+  const prompt = '<!-- job:old -->\ndo stuff'
+  expect(injectJobTag(prompt, 'new')).toBe('do stuff\n<!-- job:new -->')
+})
+
+test('readSettings returns empty structure when file missing', () => {
+  const missingPath = '/tmp/definitely-does-not-exist-claude-cron-test.json'
+  expect(() => {
+    syncJobToSettings({ id: 'x', name: 'x', schedule: '* * * * *', prompt: '<!-- job:x -->' }, missingPath)
+  }).not.toThrow()
+  // Clean up
+  import('fs').then(({unlinkSync}) => { try { unlinkSync(missingPath) } catch {} })
+})
+
 describe('settings.json sync', () => {
   const settingsPath = join(tmpdir(), `settings-${Date.now()}.json`)
   beforeEach(() => writeFileSync(settingsPath, JSON.stringify({ scheduledTasks: [] })))

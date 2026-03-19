@@ -7,7 +7,9 @@ import cronParser from 'cron-parser'
 const DEFAULT_SETTINGS = join(homedir(), '.claude', 'settings.json')
 
 export function injectJobTag(prompt, jobId) {
-  const clean = prompt.replace(/\n<!-- job:[^>]+ -->$/, '')
+  const clean = prompt
+    .replace(/^<!-- job:[^\s>]+ -->\n?/, '')  // strip from start
+    .replace(/\n<!-- job:[^\s>]+ -->$/, '')   // strip from end
   return `${clean}\n<!-- job:${jobId} -->`
 }
 
