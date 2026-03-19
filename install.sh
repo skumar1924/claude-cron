@@ -20,4 +20,18 @@ cd "$PLUGIN_DIR"
 npm init -y > /dev/null
 npm install better-sqlite3 cronstrue cron-parser express open uuid --save-prod --silent
 
+echo "Registering plugin in Claude Code settings..."
+SETTINGS="$HOME/.claude/settings.json"
+if [ -f "$SETTINGS" ]; then
+  node -e "
+    const fs = require('fs');
+    const s = JSON.parse(fs.readFileSync('$SETTINGS', 'utf8'));
+    s.enabledPlugins = s.enabledPlugins || {};
+    s.enabledPlugins['claude-cron@local'] = true;
+    fs.writeFileSync('$SETTINGS', JSON.stringify(s, null, 2) + '\n');
+  "
+else
+  echo '{ "enabledPlugins": { "claude-cron@local": true } }' > "$SETTINGS"
+fi
+
 echo "Done. Restart Claude Code and run /cron to open the dashboard."
