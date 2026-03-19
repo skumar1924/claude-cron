@@ -1,0 +1,36 @@
+{
+  "name": "claude-cron",
+  "version": "1.0.0",
+  "description": "Scheduled job manager with monitoring dashboard",
+  "commands": [
+    {
+      "name": "cron",
+      "description": "Open the cron job dashboard (starts server if needed)",
+      "script": "commands/cron.js"
+    },
+    {
+      "name": "cron list",
+      "description": "List all cron jobs inline",
+      "script": "commands/cron-list.js"
+    },
+    {
+      "name": "cron run",
+      "description": "Manually trigger a cron job by id",
+      "script": "commands/cron-run.js"
+    }
+  ],
+  "hooks": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "node ~/.claude/plugins/local/claude-cron/hooks/session-start.js"
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "node ~/.claude/plugins/local/claude-cron/hooks/session-stop.js"
+      }
+    ]
+  }
+}
