@@ -3,21 +3,18 @@ set -euo pipefail
 
 PLUGIN_DIR="$HOME/.claude/plugins/local/claude-cron"
 
-echo "Building dashboard..."
-npm run build
-
 echo "Installing plugin to $PLUGIN_DIR..."
-mkdir -p "$PLUGIN_DIR/server/public" "$PLUGIN_DIR/hooks" "$PLUGIN_DIR/commands"
+mkdir -p "$PLUGIN_DIR/server/public" "$PLUGIN_DIR/hooks" "$PLUGIN_DIR/commands-js" "$PLUGIN_DIR/commands"
 
 cp plugin.json "$PLUGIN_DIR/"
 cp src/server/index.js src/server/db.js src/server/scheduler.js "$PLUGIN_DIR/server/"
+cp src/server/public/index.html "$PLUGIN_DIR/server/public/"
 cp src/hooks/session-start.js src/hooks/session-stop.js "$PLUGIN_DIR/hooks/"
-cp src/commands/cron.js src/commands/cron-list.js src/commands/cron-run.js "$PLUGIN_DIR/commands/"
-cp -r dist/. "$PLUGIN_DIR/server/public/"
+cp src/commands/cron.js src/commands/cron-list.js src/commands/cron-run.js "$PLUGIN_DIR/commands-js/"
+cp src/commands/cron.md src/commands/cron-list.md src/commands/cron-run.md "$PLUGIN_DIR/commands/"
 
 echo "Installing production dependencies..."
 cd "$PLUGIN_DIR"
-npm init -y > /dev/null
 npm install better-sqlite3 cronstrue cron-parser express open uuid --save-prod --silent
 
 echo "Registering plugin in Claude Code settings..."

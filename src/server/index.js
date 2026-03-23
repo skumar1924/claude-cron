@@ -1,7 +1,8 @@
 import express from 'express'
 import { createDb, insertJob, getJob, listJobs, updateJob,
-         deleteJob, listRuns, seedBuiltinJobs } from './db.js'
-import { syncJobToSettings, removeJobFromSettings, injectJobTag } from './scheduler.js'
+         deleteJob, listRuns, insertRun, tryInsertRun, updateRun, seedBuiltinJobs,
+         cleanupStaleRuns, deleteRun, deleteRunsForJob } from './db.js'
+import { syncJobToSettings, removeJobFromSettings, injectJobTag, shouldRunNow } from './scheduler.js'
 import { v4 as uuidv4 } from 'uuid'
 import { writeFileSync } from 'fs'
 import { join, dirname } from 'path'
@@ -17,6 +18,86 @@ const PID_PATH = join(homedir(), '.claude', 'plugins', 'local', 'claude-cron', '
 // createTestServer accepts an injected db and skips settings.json writes
 export function createTestServer(db) {
   return buildApp(db, { sync: false })
+}
+
+function runJob(db, job, triggeredBy = 'manual') {
+  const runId = uuidv4()
+  const startedAt = new Date().toISOString()
+  const inserted = tryInsertRun(db, { id: runId, job_id: job.id, started_at: startedAt, triggered_by: triggeredBy })
+  if (!inserted) {
+    console.log(`[cron] skipping ${job.name} — already running`)
+    return null
+  }
+
+  // Strip nesting-guard vars so claude isn't blocked as a nested session
+  const env = { ...process.env }
+  delete env.CLAUDECODE
+  delete env.CLAUDE_CODE
+
+  const child = spawn('claude', [
+    '-p',
+    '--dangerously-skip-permissions',
+    '--output-format', 'json',
+    job.prompt,
+  ], {
+    detached: true,
+    stdio: ['ignore', 'pipe', 'ignore'],
+    env,
+  })
+
+  let output = ''
+  let timedOut = false
+  child.stdout.on('data', chunk => { output += chunk.toString() })
+
+  const timeout = setTimeout(() => {
+    timedOut = true
+    child.kill()
+  }, 10 * 60 * 1000)
+
+  child.on('close', code => {
+    clearTimeout(timeout)
+    let textOutput = output.trim()
+    let cost_usd = null, input_tokens = null, output_tokens = null
+    if (textOutput) {
+      try {
+        const parsed = JSON.parse(textOutput)
+        textOutput = parsed.result ?? textOutput
+        cost_usd = parsed.total_cost_usd ?? parsed.cost_usd ?? null
+        input_tokens = parsed.usage?.input_tokens ?? null
+        output_tokens = parsed.usage?.output_tokens ?? null
+      } catch {}
+    }
+    updateRun(db, runId, {
+      status: timedOut ? 'error' : code === 0 ? 'success' : 'error',
+      finished_at: new Date().toISOString(),
+      duration_ms: Date.now() - new Date(startedAt).getTime(),
+      error: timedOut ? 'Timeout (exceeded 10 minutes)' : code !== 0 ? `Exit code ${code}` : null,
+      output: textOutput || null,
+      cost_usd,
+      input_tokens,
+      output_tokens,
+    })
+  })
+
+  child.unref()
+  return runId
+}
+
+// Fires every minute, aligned to the wall clock
+function startScheduler(db) {
+  function tick() {
+    const due = listJobs(db).filter(j => j.enabled && shouldRunNow(j.schedule))
+    for (const job of due) {
+      console.log(`[cron] firing ${job.name}`)
+      runJob(db, job, 'scheduler')
+    }
+    // Reschedule for the next minute boundary
+    const msUntilNext = 60000 - (Date.now() % 60000) + 50
+    setTimeout(tick, msUntilNext)
+  }
+  const msUntilFirst = 60000 - (Date.now() % 60000) + 50
+  setTimeout(tick, msUntilFirst)
+  console.log(`Scheduler started — first tick in ${Math.round(msUntilFirst / 1000)}s`)
 }
 
 function buildApp(db, { sync = true } = {}) {
@@ -61,9 +142,18 @@ function buildApp(db, { sync = true } = {}) {
   app.post('/api/jobs/:id/run', (req, res) => {
     const job = getJob(db, req.params.id)
     if (!job) return res.status(404).end()
-    // Use spawn with array args — no shell, no injection risk
-    spawn('claude', ['-p', job.prompt], { detached: true, stdio: 'ignore' }).unref()
+    const runId = runJob(db, job, 'manual')
+    if (!runId) return res.status(409).json({ error: 'Job is already running' })
     res.status(202).end()
+  })
+
+  app.get('/api/digest', (_req, res) => {
+    const run = db.prepare(`
+      SELECT * FROM runs
+      WHERE job_id = 'cron-health-digest' AND status = 'success' AND output IS NOT NULL
+      ORDER BY started_at DESC LIMIT 1
+    `).get()
+    res.json(run ?? null)
   })
 
   app.get('/api/runs', (req, res) => {
@@ -72,15 +162,29 @@ function buildApp(db, { sync = true } = {}) {
     res.json(listRuns(db, { jobId, days }))
   })
 
+  app.delete('/api/runs/:id', (req, res) => {
+    deleteRun(db, req.params.id)
+    res.status(204).end()
+  })
+
+  app.delete('/api/runs', (req, res) => {
+    const { jobId } = req.query
+    if (!jobId) return res.status(400).json({ error: 'jobId query param required' })
+    const count = deleteRunsForJob(db, jobId)
+    res.json({ deleted: count })
+  })
+
   return app
 }
 
 // Entry point for background server process
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const db = createDb(DB_PATH)
+  cleanupStaleRuns(db)
   seedBuiltinJobs(db)
   syncJobToSettings(getJob(db, 'cron-health-digest'))
   const app = buildApp(db)
+  startScheduler(db)
   app.listen(PORT, '127.0.0.1', () => {
     writeFileSync(PID_PATH, String(process.pid))
     console.log(`claude-cron server running on http://localhost:${PORT}`)
