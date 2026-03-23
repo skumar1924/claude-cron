@@ -4,7 +4,9 @@ set -euo pipefail
 PLUGIN_DIR="$HOME/.claude/plugins/local/claude-cron"
 
 echo "Installing plugin to $PLUGIN_DIR..."
-mkdir -p "$PLUGIN_DIR/server/public" "$PLUGIN_DIR/hooks" "$PLUGIN_DIR/commands-js" "$PLUGIN_DIR/commands"
+mkdir -p "$PLUGIN_DIR/server" "$PLUGIN_DIR/hooks" "$PLUGIN_DIR/commands-js" "$PLUGIN_DIR/commands"
+# Wipe public/ so stale build artefacts from previous installs don't linger
+rm -rf "$PLUGIN_DIR/server/public" && mkdir -p "$PLUGIN_DIR/server/public"
 
 cp plugin.json "$PLUGIN_DIR/"
 cp src/server/index.js src/server/db.js src/server/scheduler.js "$PLUGIN_DIR/server/"
